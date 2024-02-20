@@ -27,6 +27,8 @@ import json
 #Helps to format each company-URL into a format Traxcn takes to search for the company
 from urllib.parse import urlparse
 
+import re
+
 
 def getAirtableAPI():
     airtable_key = os.getenv("API_KEY_AIRTABLE")
@@ -35,9 +37,9 @@ def getAirtableAPI():
     else:
         raise Exception("No Airtable API token found in OS. Please save the token under 'API_KEY_AIRTABLE'")
 
-def getAirtableTable(fBaseKey, fTableKey):
+def getAirtableTable(fBaseKey, fTableKey, api):
     try:
-        return airtable_api.table(fBaseKey, fTableKey)
+        return api.table(fBaseKey, fTableKey)
     except:
         raise Exception("Table not found. Please check the Base Key nad the Table Key")
     
@@ -51,7 +53,7 @@ def getTraxcnToken():
         raise Exception("No Tracxn API token found in OS. Please save the token under 'API_KEY_TRACXN'")
     
 
-def requestData(fUrl):
+def requestData(fUrl, tracxn_token):
     url = fUrl
     requestBody = {
         "filter":{
@@ -69,7 +71,7 @@ def requestData(fUrl):
     else:
         return result.json()
 
-#TODO: Check if this is bullet proof for Tracxn API
+
 def simplifyUrl(fUrl):
     url = fUrl
     # Check if the URL has a scheme. If not, prepend 'http://'.
@@ -102,16 +104,17 @@ The structure should look like the following:
 
 
 '''
-#TODO: How to make check for URL (existence) a boolean?
-def addDataToTable(fDataDict, table, checkForURL = False):
+def addDataToTable(fDataDict, table, ffieldNames, checkForURL = False):
+    #Normal creation of the element
     if checkForURL == False:
         table.create(fDataDict)
         return True
+    #Checking for element existence first 
     else:
         tableContent = table.all()
         for rows in tableContent:
             for field in rows["fields"]:
-                if field == fieldNames["URL"]:
+                if field == ffieldNames["URL"]:
                     if rows["fields"][field] == fDataDict[fieldNames["URL"]]:
                         print(rows["fields"][field] + " has already been fed to the table.")
                         return False
@@ -152,38 +155,42 @@ def extractData(jsonFile, fieldNames):
                     elif field == "URL":
                         dataDict[fieldNames[field]] = company.get('domain', '')
                 except:
-                    dataDict[fieldNames[field]] = ''
+                    dataDict[fieldNames[field]] = None
     return dataDict
 
 
+def extract_keys(url):
+    pattern = r'https://airtable.com/(app[\w\d]+)/([\w\d]+)/'
+    match = re.search(pattern, url)
+
+    if match:
+        baseKey, tableKey = match.groups()
+        return baseKey, tableKey
+    else:
+        return None, None
 
 
-    
 
 #TODO: Name arguments correctly
-#TODO: Find out baseKey & TableKey via the link of the Base
-#TODO: Get to know the Main function better
-#TODO: How to ensure the right arguments are being given?
 
-#def tracxn_airtable_api_main(fCompanyUrl, fBaseKey, fTableKey):
+def main():
+    try:
+        with open('config.json', 'r') as config_file:
+            config = json.load(config_file)
+    except:
+        raise Exception("Couldn't load the configuration file")
 
-company_url = "hiya.com"
-baseKey = "appffsUqhuRXKiqmT"
-tableKey = "tbl4oxAFNsMFdX3CB"
+    baseKey, tableKey=  extract_keys(config['links']['airtable'])
+    company_url = simplifyUrl(config['links']['company'])
+    fieldNames = config['fields']
 
-airtable_api = getAirtableAPI()
-airtable_table = getAirtableTable(baseKey, tableKey)
-tracxn_token = getTraxcnToken()
+    airtable_api = getAirtableAPI()
+    airtable_table = getAirtableTable(baseKey, tableKey, airtable_api)
+    tracxn_token = getTraxcnToken()
 
-fieldNames = {
-    "Name" :                "Name",
-    "Logo" :                "Logo",
-    "Short Description" :   "Description (short)",
-    "Long Description" :    "Description (long)",
-    "Headquaters" :         "Country",
-    "Founded Year" :        "Founded year",
-    "Employee Count" :      "Tracxn Score",
-    "URL" :                 "URL"
-}
+    addDataToTable(extractData(requestData(company_url, tracxn_token), fieldNames), airtable_table, fieldNames)
 
-addDataToTable(extractData(requestData(company_url), fieldNames), airtable_table, True)
+
+if __name__ == "__main__":
+   main()
+

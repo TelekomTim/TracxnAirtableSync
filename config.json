@@ -1,0 +1,19 @@
+{
+    "fields": {
+        "Name" :                "Name",
+        "Logo" :                "Logo",
+        "Short Description" :   "Description (short)",
+        "Long Description" :    "Description (long)",
+        "Headquaters" :         "Country",
+        "Founded Year" :        "Founded year",
+        "Employee Count" :      "Tracxn Score",
+        "URL" :                 "URL"
+    },
+
+    "links": {
+        "airtable": "https://airtable.com/appffsUqhuRXKiqmT/tbl4oxAFNsMFdX3CB/viw0Ab0MXQqeD3WVI?blocks=hide",
+        "company": "https://ixana.ai/"
+    }
+
+    
+}
