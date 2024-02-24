@@ -35,7 +35,7 @@ Ensure your config.json file is set up according to your field and link specific
 Store your API tokens for Tracxn and Airtable in your environment variables.
 Run the script with:
 
-    python main.py
+    python tracxn_airtable_api.py
 
 ## Configuration
 ### config.json Structure
