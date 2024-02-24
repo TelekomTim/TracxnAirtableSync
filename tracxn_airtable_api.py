@@ -1,165 +1,167 @@
-'''
+"""
 TRACXN-AIRTABLE INTERFACE 1.0.0
-This programm allows you to import company profiles into your Airtable base.
+--------------------------------
+This program imports company profiles from Tracxn into an Airtable base.
 
-To run the programm properly you need to:
-- 
+Requirements:
+1. Include a 'config.json' file with:
+   a. "fields": Maps the data fields from Tracxn to the corresponding fields in Airtable.
+      - Data with no corresponding field in Airtable will be ignored.
+      - Fields not provided by Tracxn will remain empty in Airtable.
+   b. "links": Contains URLs for the Airtable base/table and the target company.
+
+2. Save your Tracxn API token as an environment variable (named 'API_KEY_TRACXN').
+3. Save your Airtable API token with write permissions as an environment variable (named 'API_KEY_AIRTABLE').
 
 Features:
-1. 
-2.
-3.
-4.
+1. Import any available company data from Tracxn into your Airtable tables (matching columns required) using the company URL.
+2. Prevent duplicate imports of the same company data.
 
-To be implemented:
-1.
-2.
-3.
-'''
-#Airtables library for Python requests
-from pyairtable import Api, utils
-# HTTP-library to make the calls to the tracxn API
-import requests 
-#Recieves the API token, which should be stored in the system variables
-import os
-#Formats the response from tracxn 
-import json
-#Helps to format each company-URL into a format Traxcn takes to search for the company
-from urllib.parse import urlparse
+Future Enhancements:
+1. Additional methods for importing companies.
+2. Support for more data fields (e.g., categories).
 
-import re
+Notes:
+- The program checks for the existence of data and fields before importing to avoid duplicates.
+- Ensure that the Airtable base has the necessary schema to accommodate the data being imported.
+"""
+
+# Import necessary libraries
+from pyairtable import Api, utils     # Airtable library for Python requests.
+import requests                        # HTTP library for making calls to the Tracxn API.
+import os                              # To retrieve API tokens stored as system variables.
+import json                            # For parsing and formatting JSON data from Tracxn.
+from urllib.parse import urlparse      # Utility for formatting company URLs for Tracxn searches.
+import re                              # Regular expression library for pattern matching in URLs.
+import logging                         # Logging library for tracking events and errors.
 
 
-def getAirtableAPI():
+def getAirtableAPI() -> Api:
+    """
+    Retrieves the Airtable API key from environment variables and returns an Api object.
+    Raises a ValueError if the API key is not found.
+    """
     airtable_key = os.getenv("API_KEY_AIRTABLE")
     if airtable_key: 
         return Api(airtable_key)
     else:
-        raise Exception("No Airtable API token found in OS. Please save the token under 'API_KEY_AIRTABLE'")
+        raise ValueError("No Airtable API token found in OS. Please save the token under 'API_KEY_AIRTABLE'")
 
-def getAirtableTable(fBaseKey, fTableKey, api):
+
+def getAirtableTable(fBaseKey: str, fTableKey: str, api: Api) -> Api.table:
+    """
+    Retrieves a specific table from Airtable using base key and table key.
+    Raises a ValueError if the table is not found.
+    """
     try:
         return api.table(fBaseKey, fTableKey)
     except:
-        raise Exception("Table not found. Please check the Base Key nad the Table Key")
+        raise ValueError("Table not found. Please check the Base Key and the Table Key")
     
 
-def getTraxcnToken():
+def getTraxcnToken() -> str:
+    """
+    Retrieves the Tracxn API token from environment variables.
+    Raises a ValueError if the API token is not found or set to 'none'.
+    """
     tracxn_token = os.getenv("API_KEY_TRACXN")
-    
-    if tracxn_token != "none":
+    if tracxn_token and tracxn_token.lower():
         return tracxn_token
     else:
-        raise Exception("No Tracxn API token found in OS. Please save the token under 'API_KEY_TRACXN'")
+        raise ValueError("No Tracxn API token found in OS. Please save the token under 'API_KEY_TRACXN'")
     
 
-def requestData(fUrl, tracxn_token):
-    url = fUrl
-    requestBody = {
-        "filter":{
-            "domain":[
-                simplifyUrl(url)
-                ]
-        }
+def request_data(url: str, tracxn_token: str) -> dict:
+    """
+    Requests data from the Tracxn API using the provided URL and token.
+    Returns the JSON response.
+    Raises an exception if the company is not found or if an error occurs.
+    """
+    request_body = {
+        "filter":{"domain":[simplify_url(url)]}
     }
-    #Actual Traxcn request happeninghere
-    #NOTE: Explain the request library and why we use this to make the request
-    result = requests.post("https://tracxn.com/api/2.2/companies", headers={'accessToken': tracxn_token}, json=requestBody)
 
-    if result == "":
-        raise Exception("Company not found in Traxcn Database")
+    result = requests.post("https://tracxn.com/api/2.2/companies", headers={'accessToken': tracxn_token}, json=request_body)
+
+    if result.status_code != 200:
+        raise ValueError("Error in API request or Company not found in Tracxn Database")
     else:
         return result.json()
 
 
-def simplifyUrl(fUrl):
-    url = fUrl
-    # Check if the URL has a scheme. If not, prepend 'http://'.
-    if not urlparse(url).scheme:
-        url = 'http://' + url
+def simplify_url(url: str) -> str:
+    """
+    Simplifies a given URL to its domain name.
+    Removes 'www.' and any port numbers, and ensures the URL has a scheme.
+    """
 
-    parsed_url = urlparse(url)
+    parsed_url = urlparse(url, scheme='http')
     domain = parsed_url.netloc
 
-    # Remove 'www.' if it exists
     if domain.startswith('www.'):
         domain = domain[4:]
 
-    # Remove port number if it exists
     domain = domain.split(':')[0]
 
     return domain
 
 
-'''
-The dictionary (fFieldNames) is used to track:
-1. What data should be added to the table
-2. In which field the data should be stored
 
-For this:
-1. The data where there is no field provided or available will not be filled in
-2. The data that is not provided from Tracxn will be empty (?)
-
-The structure should look like the following:
-
-
-'''
-def addDataToTable(fDataDict, table, ffieldNames, checkForURL = False):
-    #Normal creation of the element
-    if checkForURL == False:
-        table.create(fDataDict)
+def add_data_to_table(data_dict: dict, table: Api.table, field_names: dict, check_for_url: bool = False):
+    """
+    Adds data to the specified table.
+    If check_for_url is True, checks for the existence of the URL in the table before adding.
+    Returns True if data is added, False otherwise.
+    """
+    if not check_for_url:
+        table.create(data_dict)
         return True
-    #Checking for element existence first 
-    else:
-        tableContent = table.all()
-        for rows in tableContent:
-            for field in rows["fields"]:
-                if field == ffieldNames["URL"]:
-                    if rows["fields"][field] == fDataDict[fieldNames["URL"]]:
-                        print(rows["fields"][field] + " has already been fed to the table.")
-                        return False
-        else:
-            table.create(fDataDict)
-            return True
+    
+    
+    table_content = table.all()
+    for row in table_content:
+        if field_names["URL"] in row["field"] and row["fields"][field_names["URL"]] ==data_dict[field_names["URL"]]:
+            logging.info(f"{row['fields'][field_names['URL']]} has already been fed to the table.")
+            return False
+    
+    table.create(data_dict)
+    return True
 
 
 
-def extractData(jsonFile, fieldNames):
-    dataDict = dict()
-    for company in jsonFile.get("result", []):
-        for field in fieldNames:
-            if fieldNames[field] != None:
+def extract_data(json_file, field_names):
+    """
+    Extracts data from a given JSON file based on specified field names.
+    Returns a dictionary with the extracted data.
+    """
+    data_dict = dict()
+    for company in json_file.get("result", []):
+        for field, airtable_field in field_names.items():
+            if airtable_field:
                 try:
-                    #Matches the JSON structure to the field names in Airtable
-                    if field == "Name":
-                        dataDict[fieldNames[field]] = company.get('name', '')
-
-                    elif field == "Logo":
-                        dataDict[fieldNames[field]] = utils.attachment(company['logos']['imageUrl']) if company['logos']['imageUrl'] else [],
-
-                    elif field == "Short Description":
-                        dataDict[fieldNames[field]] = company['description']['short']
-
-                    elif field == "Long Description":
-                        dataDict[fieldNames[field]] = company['description']['long']
-
-                    elif field == "Headquaters":
-                        dataDict[fieldNames[field]] = ", ".join([company['location']['city'], company['location']['country'], company['location']['continent']])
-
-                    elif field == "Founded Year":
-                        dataDict[fieldNames[field]] = str(company['foundedYear']) + "-01-01"
-
-                    elif field == "Employee Count":
-                        dataDict[fieldNames[field]] = company['latestEmployeeCount']['value']
-
-                    elif field == "URL":
-                        dataDict[fieldNames[field]] = company.get('domain', '')
-                except:
-                    dataDict[fieldNames[field]] = None
-    return dataDict
+                    field_processor = {
+                        "Name": lambda c: c.get('name', ''),
+                        "Logo": lambda c: (utils.attachment(c['logos']['imageUrl']) if c['logos']['imageUrl'] else [],),
+                        "Short Description": lambda c: c['description']['short'],
+                        "Long Description": lambda c: c['description']['long'],
+                        "Headquaters": lambda c: ", ".join([c['location']['city'], c['location']['country'], c['location']['continent']]),
+                        "Founded Year": lambda c: str(c['foundedYear']) + "-01-01",
+                        "Employee Count": lambda c: c['latestEmployeeCount']['value'],
+                        "URL": lambda c: c.get('domain', '')
+                    }
+                    if field in field_processor:
+                        data_dict[airtable_field] = field_processor[field](company)
+                except Exception as e:
+                    logging.error(f"Error processing field {field}: {e}")
+                    data_dict[field_names[field]] = None
+    return data_dict
 
 
-def extract_keys(url):
+def extract_keys(url: str) -> tuple:
+    """
+    Extracts base key and table key from an Airtable URL using regex.
+    Returns a tuple (baseKey, tableKey). If no match is found, returns (None, None).
+    """
     pattern = r'https://airtable.com/(app[\w\d]+)/([\w\d]+)/'
     match = re.search(pattern, url)
 
@@ -171,25 +173,42 @@ def extract_keys(url):
 
 
 
-#TODO: Name arguments correctly
-
 def main():
+    """
+    Main function of the application.
+    
+    This function orchestrates the process of reading the configuration,
+    extracting keys from the Airtable URL, simplifying the company URL,
+    interacting with the Airtable API, and adding data to the Airtable table.
+    It handles the integration of different functional components and includes
+    error handling for various stages of the process.
+    
+    Raises:
+        Exception: If any error occurs during the process, including issues
+        with loading the configuration file, extracting data, or interacting
+        with APIs.
+    """
     try:
         with open('config.json', 'r') as config_file:
             config = json.load(config_file)
-    except:
-        raise Exception("Couldn't load the configuration file")
 
-    baseKey, tableKey=  extract_keys(config['links']['airtable'])
-    company_url = simplifyUrl(config['links']['company'])
-    fieldNames = config['fields']
+        baseKey, tableKey=  extract_keys(config['links']['airtable'])
+        if baseKey is None or tableKey is None:
+            raise ValueError("Invalid Airtable URL in the configuration.")
 
-    airtable_api = getAirtableAPI()
-    airtable_table = getAirtableTable(baseKey, tableKey, airtable_api)
-    tracxn_token = getTraxcnToken()
+        company_url = simplify_url(config['links']['company'])
+        field_names = config['fields']
 
-    addDataToTable(extractData(requestData(company_url, tracxn_token), fieldNames), airtable_table, fieldNames)
+        airtable_api = getAirtableAPI()
+        airtable_table = getAirtableTable(baseKey, tableKey, airtable_api)
+        tracxn_token = getTraxcnToken()
 
+        data_to_add = extract_data(request_data(company_url, tracxn_token), field_names)
+        add_data_to_table(data_to_add, airtable_table, field_names)
+
+    except Exception as e:
+        logging.error(f"Error in main function: {e}")
+        raise
 
 if __name__ == "__main__":
    main()

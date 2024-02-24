@@ -1,19 +1,18 @@
 {
     "fields": {
-        "Name" :                "Name",
-        "Logo" :                "Logo",
-        "Short Description" :   "Description (short)",
-        "Long Description" :    "Description (long)",
-        "Headquaters" :         "Country",
-        "Founded Year" :        "Founded year",
-        "Employee Count" :      "Tracxn Score",
-        "URL" :                 "URL"
+        "Name": "${NAME_FIELD_NAME}",
+        "Logo": "${LOGO_FIELD_NAME}",
+        "Short Description": "${SHORT_DESCRIPTION_FIELD_NAME}",
+        "Long Description": "${LONG_DESCRIPTION_FIELD_NAME}",
+        "Headquarters": "${HEADQUATERS_FIELD_NAME}",
+        "Founded Year": "${FOUNDED_YEAR_FIELD_NAME}",
+        "Employee Count": "${EMPLOYEE_COUNT_FIELD_NAME}",
+        "URL": "${URL_FIELD_NAME}"
     },
 
     "links": {
-        "airtable": "https://airtable.com/appffsUqhuRXKiqmT/tbl4oxAFNsMFdX3CB/viw0Ab0MXQqeD3WVI?blocks=hide",
-        "company": "https://ixana.ai/"
+        "airtable": "${AIRTABLE_BASE_URL}",
+        "company": "${COMPANY_PROFILE_URL}"
     }
-
-    
 }
+
